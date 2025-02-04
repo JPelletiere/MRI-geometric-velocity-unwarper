@@ -1,3 +1,5 @@
+# Basic code used to quickly see a cross section of your .nii file, just enter path into img
+
 import nibabel as nib
 import matplotlib.pyplot as plt
 import numpy as np
