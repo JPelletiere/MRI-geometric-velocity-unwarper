@@ -182,7 +182,7 @@ def create_displacement_table_for_siemens_coords(Alpha_x, Alpha_y, Alpha_z,
 #---------------------------------------------------------------------
 # Main function (replicates main.m)
 #---------------------------------------------------------------------
-def main():
+def bfield_main():
     # Reference parameters (as in MATLAB main.m)
     R0 = 0.25         # m
     Gref_x = 80       # mT/m
@@ -262,4 +262,4 @@ def main():
 # Run main if executed as script
 #---------------------------------------------------------------------
 if __name__ == '__main__':
-    main()
+    bfield_main()
