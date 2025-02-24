@@ -292,8 +292,6 @@ from collections import namedtuple
 import numpy as np
 import logging
 import re
-import globals  # Note: globals variables are defined above, so this is for compatibility.
-# Instead of importing, we use the variables defined above:
 siemens_cas_local = siemens_cas
 ge_cas_local = ge_cas
 
@@ -919,7 +917,6 @@ class GradientUnwarpRunner(object):
         by[13,3] = 0.00063797; by[15,1] = -0.00077234
         self.coeffs = CoeffsTuple(ax, ay, az, bx, by, bz, R0_m)
         self.vol, self.m_rcs2ras = get_vol_affine(self.args.infile)
-        from unwarp_resample import Unwarper  # Note: In this combined script, Unwarper is defined above.
         self.unwarper = Unwarper(self.vol, self.m_rcs2ras, self.args.vendor, self.coeffs, self.args.infile)
         if self.args.fovmin:
             self.unwarper.fovmin = float(self.args.fovmin)
