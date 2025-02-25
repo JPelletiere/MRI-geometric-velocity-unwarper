@@ -319,6 +319,62 @@ def get_coefficients(vendor, cfile):
         return get_siemens_grad(cfile)
     # (For GE, additional handling would be implemented here.)
 
+# New helper to load the grid:
+def load_precomputed_grid():
+    X = np.load("X.npy")
+    Y = np.load("Y.npy")
+    Z = np.load("Z.npy")
+    # Assuming the grid is uniform, extract the 1D axes.
+    grid_x = X[:,0,0]
+    grid_y = Y[0,:,0]
+    grid_z = Z[0,0,:]
+    return grid_x, grid_y, grid_z
+
+def load_precomputed_bfields():
+    Bx = np.load("Bx.npy")
+    By = np.load("By.npy")
+    Bz = np.load("Bz.npy")
+    return Bx, By, Bz
+
+def load_precomputed_gradients():
+    dbxdx = np.load("dbxdx.npy")
+    dbxdy = np.load("dbxdy.npy")
+    dbxdz = np.load("dbxdz.npy")
+    dbydx = np.load("dbydx.npy")
+    dbydy = np.load("dbydy.npy")
+    dbydz = np.load("dbydz.npy")
+    dbzdx = np.load("dbzdx.npy")
+    dbzdy = np.load("dbzdy.npy")
+    dbzdz = np.load("dbzdz.npy")
+    return {
+        "dbxdx": dbxdx, "dbxdy": dbxdy, "dbxdz": dbxdz,
+        "dbydx": dbydx, "dbydy": dbydy, "dbydz": dbydz,
+        "dbzdx": dbzdx, "dbzdy": dbzdy, "dbzdz": dbzdz
+    }
+
+from scipy.interpolate import RegularGridInterpolator
+
+def eval_precomputed_bfields(vxyz):
+    """
+    Given an input coordinate container vxyz (a CoordsVector with x, y, z arrays),
+    load the precomputed Bx, By, Bz and interpolate them on vxyz.
+    """
+    grid_x, grid_y, grid_z = load_precomputed_grid()
+    Bx, By, Bz = load_precomputed_bfields()
+
+    interp_Bx = RegularGridInterpolator((grid_x, grid_y, grid_z), Bx, method='linear', bounds_error=False, fill_value=0)
+    interp_By = RegularGridInterpolator((grid_x, grid_y, grid_z), By, method='linear', bounds_error=False, fill_value=0)
+    interp_Bz = RegularGridInterpolator((grid_x, grid_y, grid_z), Bz, method='linear', bounds_error=False, fill_value=0)
+
+    # Prepare the points for interpolation.
+    pts = np.stack((vxyz.x.ravel(), vxyz.y.ravel(), vxyz.z.ravel()), axis=-1)
+    bx_vals = interp_Bx(pts).reshape(vxyz.x.shape)
+    by_vals = interp_By(pts).reshape(vxyz.x.shape)
+    bz_vals = interp_Bz(pts).reshape(vxyz.x.shape)
+
+    # Return as a CoordsVector.
+    return CoordsVector(bx_vals, by_vals, bz_vals), vxyz
+
 def coef_file_parse(cfile, txt_var_map):
     """
     Parses a .coef file (for GE or Siemens) and updates txt_var_map in place.
@@ -370,13 +426,14 @@ def get_siemens_coef(cfile):
     ##                   'Beta_z': bz}
     ##
     ##    coef_file_parse(cfile, txt_var_map)
-    # Manually assigned coefficients (example values)
+# Manually assigned coefficients (example values)
     with open("coeff.grad", "r") as f:
         for line in f:
             line = line.strip()
             # Skip empty lines or comment lines starting with '#'
             if not line or line.startswith("#"):
                 continue
+
             # Expected line format (for coefficient lines):
             #   <serial> <Letter>( <i, j>) <value> <axis>
             # Example: "  1 A( 3, 0)           -0.05625983                  z"
@@ -389,6 +446,7 @@ def get_siemens_coef(cfile):
             j = int(match.group(3))
             value = float(match.group(4))
             axis = match.group(5)  # "x", "y", or "z"
+
             # For coefficients starting with A
             if coeff_letter == "A":
                 if axis == "z":
@@ -396,6 +454,7 @@ def get_siemens_coef(cfile):
                     az[i, 0] = value
                 elif axis == "x":
                     ax[i, j] = value
+
             # For coefficients starting with B (in this file, they have axis y)
             elif coeff_letter == "B":
                 if axis == "y":
@@ -572,7 +631,7 @@ class Unwarper(object):
         log.info(f"Evaluating spherical harmonics on a {num_points}^3 grid")
         log.info(f"with extents {fov_min_mm}mm to {fov_max_mm}mm")
         gvxyz = CoordsVector(gvx, gvy, gvz)
-        _dv, _dxyz = eval_spherical_harmonics(coeffs, vendor, gvxyz)
+        _dv, _ = eval_precomputed_bfields(gvxyz)
         return CoordsVector(_dv.x, _dv.y, _dv.z), g_xyz2rcs
 
     def run(self):
@@ -584,7 +643,7 @@ class Unwarper(object):
         m_ras2lai = np.array([[-1.0, 0.0, 0.0, 0.0],
                               [0.0, 1.0, 0.0, 0.0],
                               [0.0, 0.0, -1.0, 0.0],
-                              [0.0, 0.0, 0.0, 1.0]], dtype=np.float)
+                              [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
         m_rcs2lai = np.dot(m_ras2lai, self.m_rcs2ras)
         m_rcs2lai_nohalf = m_rcs2lai.copy()
         '''
@@ -643,12 +702,12 @@ class Unwarper(object):
             m_vox2fsl = np.array([[-pixdim1, 0.0, 0.0, pixdim1*(nr-1)],
                                    [0.0, pixdim2, 0.0, 0.0],
                                    [0.0, 0.0, pixdim3, 0.0],
-                                   [0.0, 0.0, 0.0, 1.0]], dtype=np.float)
+                                   [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
         else:
             m_vox2fsl = np.array([[pixdim1, 0.0, 0.0, 0.0],
                                   [0.0, pixdim2, 0.0, 0.0],
                                   [0.0, 0.0, pixdim3, 0.0],
-                                  [0.0, 0.0, 0.0, 1.0]], dtype=np.float)
+                                  [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
         log.info('Unwarping slice by slice')
         for s in range(ns):
             sys.stdout.flush()
@@ -886,12 +945,14 @@ class GradientUnwarpRunner(object):
         bx = np.zeros((20,20))
         by = np.zeros((20,20))
         bz = np.zeros((20,20))
+        # Manually assigned coefficients (example values)
         with open("coeff.grad", "r") as f:
             for line in f:
                 line = line.strip()
                 # Skip empty lines or comment lines starting with '#'
                 if not line or line.startswith("#"):
                     continue
+
                 # Expected line format (for coefficient lines):
                 #   <serial> <Letter>( <i, j>) <value> <axis>
                 # Example: "  1 A( 3, 0)           -0.05625983                  z"
@@ -899,11 +960,13 @@ class GradientUnwarpRunner(object):
                 match = re.match(pattern, line)
                 if not match:
                     continue
+
                 coeff_letter = match.group(1)  # "A" or "B"
                 i = int(match.group(2))
                 j = int(match.group(3))
                 value = float(match.group(4))
                 axis = match.group(5)  # "x", "y", or "z"
+
                 # For coefficients starting with A
                 if coeff_letter == "A":
                     if axis == "z":
@@ -911,6 +974,7 @@ class GradientUnwarpRunner(object):
                         az[i, 0] = value
                     elif axis == "x":
                         ax[i, j] = value
+
                 # For coefficients starting with B (in this file, they have axis y)
                 elif coeff_letter == "B":
                     if axis == "y":
@@ -952,7 +1016,7 @@ def geometric_unwarp_main():
         dataset_folders = [str(f).strip().split('.')[0] for f in excel_data[4, 1:] if not pd.isna(f) and str(f).strip() != '']
         velocity_labels = [str(f).strip().split('.')[0] for f in excel_data[6, 1:] if not pd.isna(f) and str(f).strip() != '']
         flow_folder_names = [str(f).strip().split('.')[0] for f in excel_data[5, 1:] if not pd.isna(f) and str(f).strip() != '']
-        mask_folder_name = str(excel_data[8, 1]).strip() if pd.notna(excel_data[7, 1]) else ""
+        mask_folder_name = str(excel_data[7, 1]).strip() if pd.notna(excel_data[7, 1]) else ""
         
         if len(velocity_labels) != len(flow_folder_names):
             raise ValueError("Mismatch in the number of flow folders and labels")
