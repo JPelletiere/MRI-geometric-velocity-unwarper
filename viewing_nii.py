@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load the NIfTI file using nibabel
-img = nib.load(r"C:\Old_Testing\test dataset\126_corrt.nii")
+img = nib.load(r"C:\Old_Testing\fullWarp_abs.nii")
 
 # Get the image data as a NumPy array
 data = img.get_fdata()  # for newer nibabel versions; use get_data() for older ones
@@ -23,7 +23,7 @@ slice_data = data[:, :, slice_index]
 plt.figure(figsize=(10, 10), dpi=150)  # larger figure and higher DPI
 
 # Display the slice with a colorful colormap and smooth interpolation
-im = plt.imshow(slice_data, cmap='jet', interpolation='bilinear')
+im = plt.imshow(slice_data, cmap='grey', interpolation='bilinear')
 plt.title(f"Axial Slice {slice_index}")
 plt.axis('off')
 

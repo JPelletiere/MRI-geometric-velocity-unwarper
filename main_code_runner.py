@@ -3,7 +3,7 @@ from geometric_unwarp import geometric_unwarp_main
 from velocity_correction import velocity_unwarping_main
 from bfields import bfield_main
 
-run_bfields = True
+run_bfields = False # This is a very heavy computation that can take over an hour, run this BEFORE needed for on the spot analysis
 run_calc_pixel_loc = True
 run_gradient_unwarp = False
 run_MainDataProcessing = True

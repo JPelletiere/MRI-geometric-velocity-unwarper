@@ -11,6 +11,9 @@ import math
 import scipy.special
 import re
 
+siemens_fovmin = -0.18  # fov min in meters
+siemens_fovmax = 0.18   # fov max in meters
+
 #---------------------------------------------------------------------
 # Function: siemens_legendre
 # Description:
@@ -92,7 +95,7 @@ def create_displacement_table_for_siemens_coords(Alpha_x, Alpha_y, Alpha_z,
                                                   Beta_x, Beta_y, Beta_z, table_name):
     res = 0.001
     # Create grid values from -0.18 to 0.18 (inclusive)
-    coordvals = np.arange(-0.18, 0.18 + res, res)
+    coordvals = np.arange(siemens_fovmin, siemens_fovmax + res, res)
     ncoords = coordvals.size
     # Use ndgrid equivalent: meshgrid with indexing='ij'
     X_grid, Y_grid, Z_grid = np.meshgrid(coordvals, coordvals, coordvals, indexing='ij')
