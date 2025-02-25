@@ -370,49 +370,36 @@ def get_siemens_coef(cfile):
     ##                   'Beta_z': bz}
     ##
     ##    coef_file_parse(cfile, txt_var_map)
-    az[ 3, 0]    =       -0.05625983
-    az[ 5, 0]     =      -0.11012906
-    az[ 7, 0]      =       0.04633207
-    az[ 9, 0] =          -0.00657009
-    az[11, 0]  =         -0.00428858
-    az[13, 0]   =          0.00447544
-    az[15, 0]    =        -0.00265928
-    az[17, 0]     =         0.00127730
-    az[19, 0]      =       -0.00053032
-    ax[ 3, 1]       =      -0.02516312
-    ax[3, 3]         =    -0.00348829
-    ax[ 5, 1] =          -0.09458096
-    ax[ 5, 3]  =         -0.00327898
-    ax[ 5, 5]   =        -0.00273898
-    ax[ 7, 1]    =          0.01439247
-    ax[ 7, 3]     =         0.00735310
-    ax[ 7,5]     =       -0.00159909
-    ax[ 7, 7]       =        0.00309240
-    ax[ 9, 1]        =       0.00856897
-    ax[ 9, 3]        =     -0.00482318
-    ax[11, 1]          =    -0.00636167
-    ax[11, 3]=            0.00242824
-    ax[13, 1] =           0.00264039
-    ax[13, 3]  =         -0.00117845
-    ax[15, 1]   =        -0.00086287
-    ax[15, 3]    =         0.00054252
-    by[ 3, 1]      =       -0.03071487
-    by[ 3, 3]       =        0.00742331
-    by[ 5, 1]       =      -0.08810678
-    by[ 5, 3]         =     -0.00469591
-    by[ 5, 5]          =    -0.00106337
-    by[ 7, 1] =            0.01993985
-    by[ 7, 3]  =          -0.00394800
-    by[ 7, 5]   =         -0.00163401
-    by[ 7, 7]    =          0.00150686
-    by[ 9, 1]     =         0.00290452
-    by[ 9, 3]      =        0.00336745
-    by[ 9, 5]       =       0.00072598
-    by[11, 1]        =     -0.00376990
-    by[11, 3]         =    -0.00151889
-    by[13, 1]          =     0.00189707
-    by[13, 3] =            0.00063797
-    by[15, 1]  =          -0.00077234
+    # Manually assigned coefficients (example values)
+    with open("coeff.grad", "r") as f:
+        for line in f:
+            line = line.strip()
+            # Skip empty lines or comment lines starting with '#'
+            if not line or line.startswith("#"):
+                continue
+            # Expected line format (for coefficient lines):
+            #   <serial> <Letter>( <i, j>) <value> <axis>
+            # Example: "  1 A( 3, 0)           -0.05625983                  z"
+            pattern = r'^\s*\d+\s+([AB])\(\s*(\d+),\s*(\d+)\)\s+([-.\d]+)\s+([xyz])'
+            match = re.match(pattern, line)
+            if not match:
+                continue
+            coeff_letter = match.group(1)  # "A" or "B"
+            i = int(match.group(2))
+            j = int(match.group(3))
+            value = float(match.group(4))
+            axis = match.group(5)  # "x", "y", or "z"
+            # For coefficients starting with A
+            if coeff_letter == "A":
+                if axis == "z":
+                    # For axis z, assign to az; use j=0 regardless of the file j value.
+                    az[i, 0] = value
+                elif axis == "x":
+                    ax[i, j] = value
+            # For coefficients starting with B (in this file, they have axis y)
+            elif coeff_letter == "B":
+                if axis == "y":
+                    by[i, j] = value
     print(Coeffs(ax, ay, az, bx, by, bz, R0_m))
     return Coeffs(ax, ay, az, bx, by, bz, R0_m)
 
@@ -899,22 +886,35 @@ class GradientUnwarpRunner(object):
         bx = np.zeros((20,20))
         by = np.zeros((20,20))
         bz = np.zeros((20,20))
-        # Manually assigned coefficients (example values)
-        az[ 3, 0] = -0.05625983; az[ 5, 0] = -0.11012906; az[ 7, 0] = 0.04633207
-        az[ 9, 0] = -0.00657009; az[11, 0] = -0.00428858; az[13, 0] = 0.00447544
-        az[15, 0] = -0.00265928; az[17, 0] = 0.00127730; az[19, 0] = -0.00053032
-        ax[ 3, 1] = -0.02516312; ax[3,3] = -0.00348829; ax[ 5, 1] = -0.09458096
-        ax[ 5,3] = -0.00327898; ax[ 5,5] = -0.00273898; ax[ 7,1] = 0.01439247
-        ax[ 7,3] = 0.00735310; ax[ 7,5] = -0.00159909; ax[ 7,7] = 0.00309240
-        ax[ 9,1] = 0.00856897; ax[ 9,3] = -0.00482318; ax[11,1] = -0.00636167
-        ax[11,3] = 0.00242824; ax[13,1] = 0.00264039; ax[13,3] = -0.00117845
-        ax[15,1] = -0.00086287; ax[15,3] = 0.00054252
-        by[ 3,1] = -0.03071487; by[ 3,3] = 0.00742331; by[ 5,1] = -0.08810678
-        by[ 5,3] = -0.00469591; by[ 5,5] = -0.00106337; by[ 7,1] = 0.01993985
-        by[ 7,3] = -0.00394800; by[ 7,5] = -0.00163401; by[ 7,7] = 0.00150686
-        by[ 9,1] = 0.00290452; by[ 9,3] = 0.00336745; by[ 9,5] = 0.00072598
-        by[11,1] = -0.00376990; by[11,3] = -0.00151889; by[13,1] = 0.00189707
-        by[13,3] = 0.00063797; by[15,1] = -0.00077234
+        with open("coeff.grad", "r") as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines or comment lines starting with '#'
+                if not line or line.startswith("#"):
+                    continue
+                # Expected line format (for coefficient lines):
+                #   <serial> <Letter>( <i, j>) <value> <axis>
+                # Example: "  1 A( 3, 0)           -0.05625983                  z"
+                pattern = r'^\s*\d+\s+([AB])\(\s*(\d+),\s*(\d+)\)\s+([-.\d]+)\s+([xyz])'
+                match = re.match(pattern, line)
+                if not match:
+                    continue
+                coeff_letter = match.group(1)  # "A" or "B"
+                i = int(match.group(2))
+                j = int(match.group(3))
+                value = float(match.group(4))
+                axis = match.group(5)  # "x", "y", or "z"
+                # For coefficients starting with A
+                if coeff_letter == "A":
+                    if axis == "z":
+                        # For axis z, assign to az; use j=0 regardless of the file j value.
+                        az[i, 0] = value
+                    elif axis == "x":
+                        ax[i, j] = value
+                # For coefficients starting with B (in this file, they have axis y)
+                elif coeff_letter == "B":
+                    if axis == "y":
+                        by[i, j] = value
         self.coeffs = CoeffsTuple(ax, ay, az, bx, by, bz, R0_m)
         self.vol, self.m_rcs2ras = get_vol_affine(self.args.infile)
         self.unwarper = Unwarper(self.vol, self.m_rcs2ras, self.args.vendor, self.coeffs, self.args.infile)

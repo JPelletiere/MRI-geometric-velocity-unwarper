@@ -9,6 +9,7 @@ All results are saved as .npy files.
 import numpy as np
 import math
 import scipy.special
+import re
 
 #---------------------------------------------------------------------
 # Function: siemens_legendre
@@ -200,53 +201,35 @@ def bfield_main():
 
     # Set nonzero coefficients (MATLAB indices adjusted to Python 0-indexing)
     # For Alpha_z:
-    Alpha_z[3, 0]  = -0.05625983
-    Alpha_z[5, 0]  = -0.11012906
-    Alpha_z[7, 0]  =  0.04633207
-    Alpha_z[9, 0]  = -0.00657009
-    Alpha_z[11, 0] = -0.00428858
-    Alpha_z[13, 0] =  0.00447544
-    Alpha_z[15, 0] = -0.00265928
-    Alpha_z[17, 0] =  0.00127730
-    Alpha_z[19, 0] = -0.00053032
-
-    # For Alpha_x:
-    Alpha_x[3, 1]  = -0.02516312
-    Alpha_x[3, 3]  = -0.00348829
-    Alpha_x[5, 1]  = -0.09458096
-    Alpha_x[5, 3]  = -0.00327898
-    Alpha_x[5, 5]  = -0.00273898
-    Alpha_x[7, 1]  =  0.01439247
-    Alpha_x[7, 3]  =  0.00735310
-    Alpha_x[7, 5]  = -0.00159909
-    Alpha_x[7, 7]  =  0.00309240
-    Alpha_x[9, 1]  =  0.00856897
-    Alpha_x[9, 3]  = -0.00482318
-    Alpha_x[11, 1] = -0.00636167
-    Alpha_x[11, 3] =  0.00242824
-    Alpha_x[13, 1] =  0.00264039
-    Alpha_x[13, 3] = -0.00117845
-    Alpha_x[15, 1] = -0.00086287
-    Alpha_x[15, 3] =  0.00054252
-
-    # For Beta_y:
-    Beta_y[3, 1]  = -0.03071487
-    Beta_y[3, 3]  =  0.00742331
-    Beta_y[5, 1]  = -0.08810678
-    Beta_y[5, 3]  = -0.00469591
-    Beta_y[5, 5]  = -0.00106337
-    Beta_y[7, 1]  =  0.01993985
-    Beta_y[7, 3]  = -0.00394800
-    Beta_y[7, 5]  = -0.00163401
-    Beta_y[7, 7]  =  0.00150686
-    Beta_y[9, 1]  =  0.00290452
-    Beta_y[9, 3]  =  0.00336745
-    Beta_y[9, 5]  =  0.00072598
-    Beta_y[11, 1] = -0.00376990
-    Beta_y[11, 3] = -0.00151889
-    Beta_y[13, 1] =  0.00189707
-    Beta_y[13, 3] =  0.00063797
-    Beta_y[15, 1] = -0.00077234
+    with open("coeff.grad", "r") as f:
+        for line in f:
+            line = line.strip()
+            # Skip empty lines or comment lines starting with '#'
+            if not line or line.startswith("#"):
+                continue
+            # Expected line format (for coefficient lines):
+            #   <serial> <Letter>( <i, j>) <value> <axis>
+            # Example: "  1 A( 3, 0)           -0.05625983                  z"
+            pattern = r'^\s*\d+\s+([AB])\(\s*(\d+),\s*(\d+)\)\s+([-.\d]+)\s+([xyz])'
+            match = re.match(pattern, line)
+            if not match:
+                continue
+            coeff_letter = match.group(1)  # "A" or "B"
+            i = int(match.group(2))
+            j = int(match.group(3))
+            value = float(match.group(4))
+            axis = match.group(5)  # "x", "y", or "z"
+            # For coefficients starting with A
+            if coeff_letter == "A":
+                if axis == "z":
+                    # For axis z, assign to az; use j=0 regardless of the file j value.
+                    Alpha_z[i, 0] = value
+                elif axis == "x":
+                    Alpha_x[i, j] = value
+            # For coefficients starting with B (in this file, they have axis y)
+            elif coeff_letter == "B":
+                if axis == "y":
+                    Beta_y[i, j] = value
 
     # Other coefficient arrays (Alpha_y, Beta_x, Beta_z) remain zero.
     table_name = 'prisma1.gwv'
