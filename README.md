@@ -39,7 +39,7 @@ This is the central driver script. It calls the various processing modules in th
 **Important**, if you are planning to use this code for on the spot data analysis during testing, make sure to run this section of the code before. It is very computationally heavy and can take over an hour. These calculated files will always be the same for a specific scanner so this only needs to be ran once then the .npy files can be repeatedly reused.
 
 #### Overview
-This is designed for computing the Legendre coefficients used in gradient coil design and for generating a displacement (B-field) table over a 3D grid. It computes a non-dimensional displacement field based on gradient coil coefficients and scales this field using a reference length (`R0`) and gradient reference (`Gref`). This field is later used in unwarping procedures. After generating the displacement field, the script calculates its spatial gradients using numerical differentiation (`np.gradient`), which are then saved for further processing in the MRI unwarping pipeline. The script comes pre-configured with constants tailored for Siemens scanners. For example, it sets field-of-view limits (`siemens_fovmin` and `siemens_fovmax`), along with different `R0` and `Gref` values depending on the Siemens model (such as sonata, avanto, allegra, and prisma1). Edit `table_name` if you want to change it to one of these. 
+This is designed for computing the Legendre coefficients used in gradient coil design and for generating a displacement (B-field) table over a 3D grid. It computes a non-dimensional displacement field based on gradient coil coefficients and scales this field using a reference length (`R0`) and gradient reference (`Gref`). This field is later used in unwarping procedures. After generating the displacement field, the script calculates its spatial gradients using numerical differentiation (`np.gradient`), which are then saved for further processing in the MRI unwarping pipeline. The script comes pre-configured with constants tailored for Siemens 3T scanners. For example, it sets field-of-view limits (`siemens_fovmin` and `siemens_fovmax`), along with different `R0` and `Gref` values depending on the Siemens model (such as sonata, avanto, allegra, and prisma1). Edit `table_name` if you want to change it to one of these. 
 
 #### Customization
 If you are using a Siemens scanner with different specifications or if you need to support another scanner type, you can modify the constants directly in the script. For instance, update the FOV limits, `R0`, and `Gref` values in the section of the code that checks the `table_name` (e.g., within the `create_displacement_table_for_siemens_coords` function). This allows you to adapt the displacement and gradient calculations to match your scanner’s hardware. To extend support to scanners other than Siemens, you would need to add new conditional branches in the scanner-specific parameter section. This involves specifying the correct FOV, reference length, and gradient reference values for your scanner, ensuring the displacement field is computed correctly for your system. The script is set up to parse a coefficient file with a specific format (using regular expressions to extract values). If your coefficient file format differs, you may need to adjust the parsing logic accordingly. It reads a coefficient file (typically named `coeff.grad`) that contains the gradient coil coefficients. The file is parsed to extract the values which populate the coefficient matrices (e.g., `Alpha_x`, `Alpha_z`, and `Beta_y`). These coefficients are critical for the accurate calculation of the displacement field.
@@ -127,8 +127,8 @@ Below is an explanation of the parameters shown in your input parameter sheet. T
    - The script will load these images and subtract them from the corresponding flow-on images to isolate true flow-induced phase changes.
 
 4. **magsname = 89**  
-   - This indicates the identifier for the **magnitude image** (often used to create a binary mask).  
-   - A typical 4D flow MRI acquisition stores not only phase information (flow-on/off) but also a magnitude image that shows the anatomical structure. The script uses this magnitude image to generate a mask (by applying an intensity threshold) that isolates relevant regions (e.g., vessels) and excludes background noise.
+   - This indicates the identifier for the **contrast image** (often used to create a binary mask).  
+   - A typical 4D flow MRI acquisition stores not only phase information (flow-on/off) but also a contrast image that shows the anatomical structure. The script uses this contrast image to generate a mask (by applying an intensity threshold) that isolates relevant regions (e.g., vessels) and excludes background noise.
 
 5. **noofslice = 64**  
    - This tells the script how many **slices** you expect in your dataset.  
@@ -136,16 +136,15 @@ Below is an explanation of the parameters shown in your input parameter sheet. T
 
 6. **venc = 1.25, 1.25, 0.8**  
    - These are the **velocity encoding (v_enc) values** for each of the three flow directions.  
-   - In many 4D flow MRI protocols, the velocity encoding parameter sets the maximum velocity that can be measured without aliasing (e.g., 1.25 m/s). Here, the first value (1.25) might correspond to flow in the x-direction, the second (1.25) to flow in y, and the third (0.8) to flow in z.  
-   - When the script processes the phase images, it uses these v_enc values to convert the raw phase data (often stored as integers) into meaningful velocity units (e.g., meters/second).
+   - In many 4D flow MRI protocols, the velocity encoding parameter sets the maximum velocity that can be measured without aliasing (e.g., 1.25 m/s). Here, the first value (1.25) corresponds to flow in the x-direction, the second (1.25) to flow in y, and the third (0.8) to flow in z.  
+   - When the script processes the phase images, it uses these v_enc values to convert the raw phase data (often stored as integers) into meaningful velocity units (e.g., m/s).
 
 7. **markl = 0**  
-   - This is a **flag** indicating whether the **Markl correction** is applied (1) or not (0).  
-   - The Markl correction typically involves a more advanced correction step that uses the gradient fields (loaded from `.npy` files) to refine the velocity data.  
-   - With `markl = 0`, the script will not apply that additional correction. Instead, it will directly scale and subtract the flow-off data from the flow-on data to produce the velocity fields.
+   - This is a **flag** indicating whether the phase distortion correction due to gradient field non-linearity (based on Markl (2003) paper: [link](https://onlinelibrary.wiley.com/doi/full/10.1002/mrm.10582)) is applied (1) or not (0).
+   - With `markl = 0`, the script will not apply gradient non-linearity correction. Instead, it will directly scale and subtract the flow-off data from the flow-on data to produce the velocity fields.
 
 #### Overview
-The **velocity_correction.py** script implements a velocity unwarping procedure to correct for flow-related distortions in MRI data. It does so by reading in MRI volumes (either from corrected NIfTI files or raw DICOM series), creating a binary mask based on a defined intensity threshold, and loading phase images for both flow-on and flow-off conditions. The script then computes corrected velocity fields using either the Markl correction (which involves interpolating precomputed gradient fields onto the coordinate maps) or a direct scaling approach if the Markl method is not enabled. Finally, the corrected velocity components along with the coordinate maps are saved as NIfTI files, and a Tecplot binary file is generated for visualization and further analysis.
+The **velocity_correction.py** script is used to obtain the velocity fields from the MRI phase images. It does so by reading in MRI image volumes (either from corrected NIfTI files or raw DICOM series), creating a binary mask based on a defined intensity threshold, and loading phase images for both flow-on and flow-off conditions. The script then computes corrected velocity fields using either the Markl correction (which involves interpolating precomputed gradient fields onto the coordinate maps) or a direct scaling approach if the Markl method is not enabled. Finally, the corrected velocity components along with the coordinate maps are saved as NIfTI files, and a Tecplot binary file is generated for visualization and further analysis.
 
 #### Customization
 The script can operate in two modes:
@@ -203,3 +202,6 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Citation
+If you use this MRI unwarping and processing suite in your research, please cite: Benson, Michael J., et al. "MRV challenge 2: phase locked turbulent measurements in a roughness array." Experiments in Fluids 64.2 (2023): 28.
